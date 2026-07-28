@@ -386,6 +386,8 @@
   .msg.user{ align-self:flex-end; background:var(--accent); color:#050810; border-bottom-right-radius:1px; font-weight:600; }
   .msg .time{ font-size:10px; opacity:.5; margin-top:5px; }
   .msg.staff .time{ color:var(--muted); }
+  .msg.new-msg{ animation:msgFlash 0.6s ease-out; }
+  @keyframes msgFlash{ 0%{opacity:0;transform:translateY(6px) scale(0.97);} 100%{opacity:1;transform:translateY(0) scale(1);} }
   .chat-input-row{ display:flex; gap:10px; padding:12px 16px;
     background:rgba(8,13,26,.9); border-top:1px solid rgba(0,229,255,.1); flex-shrink:0; }
   .chat-input-row input{ flex:1; background:rgba(0,229,255,.04); border:1px solid rgba(0,229,255,.15); color:var(--text);
@@ -685,7 +687,18 @@ const likedKey = s => 'mg_liked_' + (s ? s.username : 'anon');
 function loadLiked(s){ likedIds = new Set(); try{ likedIds = new Set(JSON.parse(localStorage.getItem(likedKey(s))||'[]')); }catch(e){} }
 function saveLiked(s){ localStorage.setItem(likedKey(s), JSON.stringify([...likedIds])); }
 async function loadGallery(){ try{ const r=await fetch(PARSER_BASE + '/api/gallery'); const d=await r.json(); if(d.success) gallery=d.gallery||[]; }catch(e){ console.error('图库加载失败',e); } }
-async function loadInbox(){ try{ const r=await fetch(PARSER_BASE + '/api/inbox'); const d=await r.json(); if(d.success) inbox=d.inbox||[]; }catch(e){ console.error('收件箱加载失败',e); } }
+async function loadInbox(){
+  try{
+    const r=await fetch(PARSER_BASE + '/api/inbox');
+    const d=await r.json();
+    if(d.success){
+      inbox=d.inbox||[];
+      // 初始化未读追踪：当前收件箱的用户都视为已通知（首次加载不提示）
+      inbox.forEach(it => unviewedUsers.add(extractUsername(it)));
+      refreshInboxBadge();
+    }
+  }catch(e){ console.error('收件箱加载失败',e); }
+}
 
 /* ============ 图库与收件箱（运行时数据） ============ */
 let gallery = [];      // 从后端 /api/gallery 加载（多端共享）
@@ -709,6 +722,9 @@ let chatUser = null;
 let chatPollTimer = null;
 let chatShowLikes = false;
 let chatMessages = [];
+let inboxViewed = false;        // 客服本次会话是否查看过收件箱
+let unviewedUsers = new Set();   // 本次会话中已收到通知的新用户
+let inboxPollTimer = null;       // 收件箱轮询定时器
 
 const HEART_ON = `<svg viewBox="0 0 24 24" fill="#e25563" stroke="#e25563" stroke-width="1.2" stroke-linejoin="round"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
 const HEART_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="#8b96a5" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
@@ -716,7 +732,85 @@ const SEND_ICON = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" s
 const CHECK_ICON = `<svg viewBox="0 0 24 24" fill="#0d1117" stroke="#0d1117" stroke-width="2"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const TRASH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="#e25563" stroke-width="1.8"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m2 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11v6M14 11v6" stroke-linecap="round"/></svg>`;
 
+/* ============ 通知系统 ============ */
 const $ = id => document.getElementById(id);
+
+// Web Audio API 提示音（无需外部文件，兼容所有浏览器）
+function playBeep(type='inbox'){
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const freqs = type === 'inbox' ? [880, 1320] : [660, 880];
+    freqs.forEach((f,i)=>{
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = f;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.18);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.25);
+      osc.start(ctx.currentTime + i * 0.18);
+      osc.stop(ctx.currentTime + i * 0.18 + 0.25);
+    });
+    setTimeout(()=>ctx.close(), 800);
+  }catch(e){}
+}
+
+// 客服端收件箱轮询：每 8 秒检查一次
+async function startInboxPoll(){
+  stopInboxPoll();
+  inboxPollTimer = setInterval(checkInbox, 8000);
+}
+function stopInboxPoll(){
+  if(inboxPollTimer){ clearInterval(inboxPollTimer); inboxPollTimer = null; }
+}
+
+async function checkInbox(){
+  try{
+    const r = await fetch(PARSER_BASE + '/api/inbox');
+    const d = await r.json();
+    if(!d.success) return;
+    inbox = d.inbox || [];
+    const curUsers = new Set(inbox.map(it=>extractUsername(it)));
+    // 找出本次轮询中新增的用户（之前未通知过的）
+    const newUsers = [...curUsers].filter(u => !unviewedUsers.has(u));
+    if(newUsers.length > 0 && inboxViewed){
+      // 有新用户发消息 → 提示
+      playBeep('inbox');
+      const names = newUsers.slice(0, 2).join('、');
+      toast(`📬 收件箱收到 <b>${newUsers.length}</b> 条新消息${newUsers.length<=2?' · '+names:''}`);
+    }
+    // 更新已通知用户集合（不重复通知）
+    newUsers.forEach(u => unviewedUsers.add(u));
+    // 刷新 badge（显示未读新用户数）
+    refreshInboxBadge();
+  }catch(e){ console.error('收件箱轮询失败', e); }
+}
+
+// 刷新 Tab 栏「收件箱」按钮的数字
+// 规则：登录后显示总用户数；进入收件箱后只显示"存在于 inbox 中且本次会话未读"的用户数
+// 删除用户后，该用户不在 inbox 中，自动不计入 badge
+function refreshInboxBadge(){
+  const session = getSession();
+  if(!session || session.role !== 'staff') return;
+  const tabEl = document.querySelector('[data-tab="inbox"]');
+  if(!tabEl) return;
+  const inboxUsers = new Set(inbox.map(it=>extractUsername(it)));
+  // 只统计：存在于 inbox 中 且 在 unviewedUsers 里的用户
+  const unviewedCount = [...unviewedUsers].filter(u => inboxUsers.has(u)).length;
+  const badgeCount = inboxViewed ? unviewedCount : inboxUsers.size;
+  let badgeEl = tabEl.querySelector('.badge');
+  if(badgeCount > 0){
+    if(!badgeEl){
+      badgeEl = document.createElement('span');
+      badgeEl.className = 'badge';
+      tabEl.appendChild(badgeEl);
+    }
+    badgeEl.textContent = badgeCount;
+    badgeEl.style.display = '';
+  } else {
+    if(badgeEl) badgeEl.style.display = 'none';
+  }
+}
 const uid = () => Date.now() + Math.floor(Math.random()*1000);
 let toastTimer;
 function toast(msg, err){ const t=$('toast'); t.innerHTML=msg; t.className='toast show'+(err?' err':'');
@@ -752,9 +846,13 @@ async function route(){
     $('authPage').classList.add('hidden'); $('appPage').classList.remove('hidden');
     loadLiked(s);
     await loadGallery();
-    if(s.role==='staff') await loadInbox();
+    if(s.role==='staff'){
+      await loadInbox();
+      startInboxPoll(); // 开启收件箱轮询
+    }
     renderApp(s);
   } else {
+    stopInboxPoll(); // 退出时停止轮询
     $('appPage').classList.add('hidden'); $('authPage').classList.remove('hidden'); renderAuth();
   }
 }
@@ -856,7 +954,15 @@ function renderApp(s){
   $('tabs').innerHTML = tabs.map(t =>
     `<button class="tab ${t.key===tab?'active':''}" data-tab="${t.key}">${t.label}${t.badge?`<span class="badge">${t.badge}</span>`:''}</button>`
   ).join('');
-  $('tabs').querySelectorAll('.tab').forEach(b=>b.onclick=async()=>{ tab=b.dataset.tab; if(tab==='inbox'&&s.role==='staff') await loadInbox(); renderApp(s); });
+  $('tabs').querySelectorAll('.tab').forEach(b=>b.onclick=async()=>{
+    tab=b.dataset.tab;
+    if(tab==='inbox'&&s.role==='staff'){
+      inboxViewed = true; // 进入收件箱后开启新消息通知
+      await loadInbox();
+      fetch(PARSER_BASE + '/api/inbox/mark-read', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({})}).catch(()=>{});
+    }
+    renderApp(s);
+  });
 
   $('main').innerHTML = renderTab(s);
   bindMain(s);
@@ -1532,6 +1638,7 @@ async function openChat(username, session){
   chatUser=username;
   chatShowLikes=false;
   chatMessages=[];
+  lastKnownMsgId=0; // 重置消息追踪
   const isStaff = session && session.role==='staff';
   $('chatName').textContent = isStaff ? username : '客服';
   $('chatSub').textContent = isStaff ? '点击下方开关查看用户喜欢的图' : '与客服的对话';
@@ -1548,27 +1655,44 @@ async function openChat(username, session){
 function closeChat(){
   $('chatOverlay').classList.remove('show');
   chatUser=null;
+  lastKnownMsgId=0;
   stopChatPoll();
 }
+
+let lastKnownMsgId = 0; // 上次轮询时已知的最新消息 ID
 
 async function loadChatMessages(username){
   try{
     const r=await fetch(PARSER_BASE + '/api/chat/'+encodeURIComponent(username));
     const d=await r.json();
-    if(d.success){ chatMessages=d.messages||[]; renderChatMessages(); }
+    if(d.success){
+      const msgs = d.messages||[];
+      const prevLen = chatMessages.length;
+      const newMsgs = prevLen > 0 ? msgs.filter(m => !chatMessages.find(cm => cm.time === m.time && cm.text === m.text)) : [];
+      const isOwnNewMsg = msgs.length > prevLen;
+      chatMessages=msgs;
+      renderChatMessages(isOwnNewMsg);
+      // 对方发来新消息（不是自己刚发的）→ 播放提示音
+      if(newMsgs.length > 0 && !isOwnNewMsg){
+        playBeep('chat');
+      }
+      // 记录最新消息 ID
+      if(msgs.length > 0) lastKnownMsgId = msgs[msgs.length-1].id || msgs[msgs.length-1].time || 0;
+    }
   }catch(e){ console.error('聊天加载失败',e); }
 }
 
-function renderChatMessages(){
+function renderChatMessages(isOwnNewMsg){
   const body=$('chatBody');
   if(!chatMessages.length){
     body.innerHTML='<div class="chat-empty">还没有消息，发一条试试吧</div>';
     return;
   }
-  body.innerHTML=chatMessages.map(m=>{
+  body.innerHTML=chatMessages.map((m,i)=>{
     const isStaff=m.sender==='staff';
     const time=new Date(m.time).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
-    return `<div class="msg ${isStaff?'staff':'user'}">${escapeHtml(m.text)}<div class="time">${time}</div></div>`;
+    const isNew = isOwnNewMsg && i === chatMessages.length - 1;
+    return `<div class="msg ${isStaff?'staff':'user'}${isNew?' new-msg':''}">${escapeHtml(m.text)}<div class="time">${time}</div></div>`;
   }).join('');
   body.scrollTop=body.scrollHeight;
 }
@@ -1585,7 +1709,7 @@ async function sendChatMessage(session){
       body:JSON.stringify({sender, text})
     });
     const d=await r.json();
-    if(d.success){ chatMessages.push(d.message); renderChatMessages(); }
+    if(d.success){ chatMessages.push(d.message); renderChatMessages(true); }
     else toast(d.error||'发送失败',true);
   }catch(e){ toast('发送失败，请检查服务',true); }
 }
