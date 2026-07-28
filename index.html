@@ -665,7 +665,7 @@ function checkImageDimensions(url, resolutionStr){
 }
 
 /* 解析服务地址（启动 baidu_pan_parser.py 后默认运行在 localhost:5000）*/
-const PARSER_BASE = ''; // 同源相对路径（页面由解析服务托管，手机访问 http://电脑IP:5000/）
+const PARSER_BASE = 'https://hyys-backend.onrender.com'; // Render 后端地址
 
 /* ============ 存储 ============ */
 const LS = { session:'mg_session' };
@@ -677,8 +677,8 @@ const clearSession = () => localStorage.removeItem(LS.session);
 const likedKey = s => 'mg_liked_' + (s ? s.username : 'anon');
 function loadLiked(s){ likedIds = new Set(); try{ likedIds = new Set(JSON.parse(localStorage.getItem(likedKey(s))||'[]')); }catch(e){} }
 function saveLiked(s){ localStorage.setItem(likedKey(s), JSON.stringify([...likedIds])); }
-async function loadGallery(){ try{ const r=await fetch('/api/gallery'); const d=await r.json(); if(d.success) gallery=d.gallery||[]; }catch(e){ console.error('图库加载失败',e); } }
-async function loadInbox(){ try{ const r=await fetch('/api/inbox'); const d=await r.json(); if(d.success) inbox=d.inbox||[]; }catch(e){ console.error('收件箱加载失败',e); } }
+async function loadGallery(){ try{ const r=await fetch(PARSER_BASE + '/api/gallery'); const d=await r.json(); if(d.success) gallery=d.gallery||[]; }catch(e){ console.error('图库加载失败',e); } }
+async function loadInbox(){ try{ const r=await fetch(PARSER_BASE + '/api/inbox'); const d=await r.json(); if(d.success) inbox=d.inbox||[]; }catch(e){ console.error('收件箱加载失败',e); } }
 
 /* ============ 图库与收件箱（运行时数据） ============ */
 let gallery = [];      // 从后端 /api/gallery 加载（多端共享）
@@ -1201,7 +1201,7 @@ function bindMain(s){
     if(!c) return;
     if(confirm('确认删除「'+c.title+'」？删除后不可恢复。')){
       try{
-        const r=await fetch('/api/gallery/'+c.id+'?password='+encodeURIComponent(s.password),{method:'DELETE'});
+        const r=await fetch(PARSER_BASE + '/api/gallery/'+c.id+'?password='+encodeURIComponent(s.password),{method:'DELETE'});
         const d=await r.json();
         if(d.success){ await loadGallery(); renderApp(s); toast(`已删除：<b>${c.title}</b>`); }
         else toast(d.error||'删除失败',true);
@@ -1230,7 +1230,7 @@ function bindMain(s){
     const from = role==='staff' ? '客服（自测）' : '用户 · '+s.username;
     const items=fav.map(c=>({title:c.title,grad:c.grad,url:c.url,from,username:s.username}));
     try{
-      const r=await fetch('/api/inbox',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items})});
+      const r=await fetch(PARSER_BASE + '/api/inbox',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items})});
       const d=await r.json();
       if(d.success){
         fav.forEach(c=>likedIds.delete(c.id)); saveLiked(s);
@@ -1306,7 +1306,7 @@ function bindMain(s){
     let okCount=0;
     for(const img of validImgs){
       try{
-        const r=await fetch('/api/gallery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        const r=await fetch(PARSER_BASE + '/api/gallery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
           title: img.name.replace(/\.[^.]+$/,'') || ('美图 '+(gallery.length+1)),
           s:'百度网盘', grad:newGrad,
           url: fullProxyUrl(img.url), srcTag:'网盘', password:s.password, ratio:img.ratio,
@@ -1378,7 +1378,7 @@ function bindMain(s){
     const check = await checkImageDimensions(url);
     if(!check.valid){ toast('规格不正确，请上传正确规格的图', true); return; }
     try{
-      const r=await fetch('/api/gallery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,s:'直链',grad:newGrad,url,srcTag:'直链',password:s.password,ratio:check.ratio,intro:intro})});
+      const r=await fetch(PARSER_BASE + '/api/gallery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,s:'直链',grad:newGrad,url,srcTag:'直链',password:s.password,ratio:check.ratio,intro:intro})});
       const d=await r.json();
       if(d.success){ toast(`已通过链接添加到图库：<b>${title}</b>（${check.ratio.replace('/',':')}）`); await loadGallery(); dailyPage=0; tab='daily'; renderApp(s); }
       else toast(d.error||'添加失败',true);
@@ -1395,7 +1395,7 @@ function bindMain(s){
     const username=el.dataset.inboxDel;
     if(!confirm('确认删除「'+username+'」的所有上传记录？此操作不可恢复。')) return;
     try{
-      const r=await fetch('/api/inbox',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password:s.password})});
+      const r=await fetch(PARSER_BASE + '/api/inbox',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password:s.password})});
       const d=await r.json();
       if(d.success){ await loadInbox(); renderApp(s); toast('已删除「'+username+'」的所有记录'); }
       else toast(d.error||'删除失败',true);
@@ -1481,7 +1481,7 @@ function closeChat(){
 
 async function loadChatMessages(username){
   try{
-    const r=await fetch('/api/chat/'+encodeURIComponent(username));
+    const r=await fetch(PARSER_BASE + '/api/chat/'+encodeURIComponent(username));
     const d=await r.json();
     if(d.success){ chatMessages=d.messages||[]; renderChatMessages(); }
   }catch(e){ console.error('聊天加载失败',e); }
@@ -1508,7 +1508,7 @@ async function sendChatMessage(session){
   input.value='';
   const sender = session && session.role==='staff' ? 'staff' : 'user';
   try{
-    const r=await fetch('/api/chat/'+encodeURIComponent(chatUser),{
+    const r=await fetch(PARSER_BASE + '/api/chat/'+encodeURIComponent(chatUser),{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({sender, text})
     });
@@ -1520,7 +1520,7 @@ async function sendChatMessage(session){
 
 async function loadUserLikes(username){
   try{
-    const r=await fetch('/api/user-likes/'+encodeURIComponent(username));
+    const r=await fetch(PARSER_BASE + '/api/user-likes/'+encodeURIComponent(username));
     const d=await r.json();
     if(d.success){
       const likes=d.likes||[];
@@ -1573,7 +1573,7 @@ function bindChatEvents(session){
 async function checkTunnelIP(){
   if(!window.location.hostname.endsWith('.loca.lt')) return;
   try{
-    const r = await fetch('/api/public-ip');
+    const r = await fetch(PARSER_BASE + '/api/public-ip');
     const d = await r.json();
     if(d.ip){
       window.__PUBLIC_IP__ = d.ip;
