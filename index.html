@@ -605,8 +605,8 @@ const RATIO_TOLERANCE = 0.03;
 const RATIO_SPECS_TEXT = '仅支持 9:16 规格';
 
 /* ===== ImgBB 图床配置 ===== */
-const IMGBB_API_KEY = 'ad78e9d2015d359d3a2a4dc2063ac60a';
-const IMGBB_UPLOAD_URL = 'https://api.imgbb.com/1/upload';
+/* API Key 已安全存储在 Cloudflare Workers 环境变量中 */
+const IMGBB_UPLOAD_URL = 'https://imgbb-proxy.imgbb-proxy.workers.dev';
 
 async function uploadToImgBB(file){
   return new Promise((resolve, reject) => {
@@ -615,7 +615,6 @@ async function uploadToImgBB(file){
       const base64 = reader.result.split(',')[1];
       try{
         const fd = new URLSearchParams();
-        fd.append('key', IMGBB_API_KEY);
         fd.append('image', base64);
         const r = await fetch(IMGBB_UPLOAD_URL, {method:'POST', body:fd});
         const d = await r.json();
