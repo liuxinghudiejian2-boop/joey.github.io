@@ -156,6 +156,11 @@
   .preview-box img{ position:absolute; inset:0; width:100%;height:100%; object-fit:cover;}
   .preview-box .ph{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     color:var(--muted); font-size:12px; padding:14px; text-align:center;}
+  .preview-box-sm{ width:120px; height:160px; border-radius:6px; position:relative; overflow:hidden; flex-shrink:0;
+    border:1px solid rgba(0,229,255,.1);}
+  .preview-box-sm img{ position:absolute; inset:0; width:100%;height:100%; object-fit:cover;}
+  .preview-box-sm .ph{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:var(--muted); font-size:10px; text-align:center; padding:4px;}
   .url-row{ display:flex; gap:10px; align-items:center;}
   .url-row input{ flex:1;}
   .url-row input[type="file"]{ flex:1; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:8px 10px; font-size:12px; }
@@ -1036,47 +1041,84 @@ function renderBaiduMode(opts){
   </div>`;
 }
 
-/* ===== 图片直链模式（原有功能） ===== */
+/* ===== 图片直链模式 ===== */
 function renderDirectMode(opts){
   return `<div class="form-card">
     <div class="field">
-      <label>图片预览</label>
-      <div class="preview-box" id="preview" style="background:${gradCss(newGrad)}">
-        <div class="ph" id="previewPh">粘贴图片直链后将在此预览</div>
-      </div>
-    </div>
-    <div class="field">
       <label>图片直链</label>
-      <div class="url-row">
-        <input type="text" id="urlInput" placeholder="粘贴图片直链，如 https://.../xxx.jpg">
-        <button class="btn btn-ghost" id="sampleBtn" type="button">填入示例</button>
+      <div class="url-row" style="gap:12px;align-items:stretch;">
+        <div class="preview-box-sm" id="preview" style="background:${gradCss(newGrad)}">
+          <div class="ph" id="previewPh">预览</div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px;justify-content:space-between;">
+          <input type="text" id="urlInput" placeholder="粘贴图片直链，如 https://.../xxx.jpg">
+          <div class="row" style="gap:6px;flex-wrap:wrap;">
+            <button class="btn btn-ghost" id="sampleBtn" type="button" style="padding:6px 12px;font-size:12px">填入示例</button>
+            <button class="btn btn-primary" id="addBtn" style="padding:6px 12px;font-size:12px">通过链接添加到图库</button>
+          </div>
+        </div>
       </div>
       <p class="mini-note">直接粘贴以 .jpg/.png/.webp 等结尾的图片直链即可加入图库。</p>
       <p class="ratio-spec">图片规格要求：<code>${RATIO_SPECS_TEXT}</code></p>
     </div>
+
+    <hr style="border-color:var(--border);margin:16px 0;">
+
     <div class="field">
       <label>本地上传到云端</label>
       <div class="url-row">
         <input type="file" id="imgbbFileInput" accept="image/*" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 10px;font-size:12px;">
-        <button class="btn btn-primary" id="imgbbUploadBtn" type="button">上传到图床</button>
+        <button class="btn btn-primary" id="imgbbUploadBtn" type="button" style="padding:7px 14px;font-size:12px">上传到图床</button>
       </div>
       <div id="imgbbStatus" style="font-size:11px;color:var(--muted);margin-top:6px;"></div>
-      <p class="mini-note">选择本地图片上传到 ImgBB 图床，自动填入上方直链。</p>
+      <p class="mini-note">选择本地图片上传到 ImgBB 图床。</p>
+    </div>
+
+    <div class="field">
+      <label>资料信息</label>
+      <div class="profile-grid">
+        <div class="profile-item">
+          <span class="pl">姓名</span>
+          <input type="text" id="localName" placeholder="如：小美" maxlength="20">
+        </div>
+        <div class="profile-item">
+          <span class="pl">身高</span>
+          <input type="text" id="localHeight" placeholder="如：165cm" maxlength="10">
+        </div>
+        <div class="profile-item">
+          <span class="pl">年龄</span>
+          <input type="text" id="localAge" placeholder="如：22" maxlength="5">
+        </div>
+        <div class="profile-item">
+          <span class="pl">职业</span>
+          <input type="text" id="localJob" placeholder="如：学生" maxlength="20">
+        </div>
+        <div class="profile-item">
+          <span class="pl">爱好</span>
+          <input type="text" id="localHobby" placeholder="如：旅行" maxlength="30">
+        </div>
+        <div class="profile-item">
+          <span class="pl">三维</span>
+          <input type="text" id="localBwh" placeholder="如：90-60-90" maxlength="20">
+        </div>
+      </div>
     </div>
     <div class="field">
-      <label>图片标题</label>
-      <input type="text" id="titleInput" placeholder="如：暮色蔷薇" maxlength="20">
+      <label>图片备注（可多选）</label>
+      <div class="tag-chips" id="localTagChips">
+        ${NOTE_TAGS.map(t=>`<span class="tag-chip" data-tag="${t}">${t}</span>`).join('')}
+      </div>
     </div>
     <div class="field">
       <label>图片介绍</label>
-      <textarea id="directIntro" placeholder="写点什么介绍这张图片吧..." rows="3" maxlength="200" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:10px 12px;font-size:13px;resize:vertical;font-family:inherit;"></textarea>
+      <textarea id="localIntro" placeholder="写点什么介绍这张图片吧..." rows="3" maxlength="200" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:10px 12px;font-size:13px;resize:vertical;font-family:inherit;"></textarea>
     </div>
     <div class="field">
       <label>回退配色（链接加载失败时使用）</label>
       <div class="grad-pick">${opts}</div>
     </div>
     <div class="row">
-      <button class="btn btn-primary" id="addBtn">通过链接添加到图库</button>
+      <button class="btn btn-primary" id="localAddBtn">上传本地图片到图库</button>
     </div>
   </div>`;
 }
@@ -1330,8 +1372,8 @@ function bindMain(s){
   const urlInput=$('urlInput');
   if(urlInput){
     const updPreview=()=>{ const v=urlInput.value.trim(); const ph=$('previewPh');
-      if(v){ $('preview').innerHTML=`<img src="${v}" onerror="this.style.display='none';document.getElementById('previewPh').style.display='flex'"><div class="ph" id="previewPh" style="display:none">链接无法加载，将使用回退配色</div>`; }
-      else { $('preview').innerHTML=`<div class="ph">粘贴图片直链后将在此预览</div>`; $('preview').style.background=gradCss(newGrad); }
+      if(v){ $('preview').innerHTML=`<img src="${v}" onerror="this.style.display='none';document.getElementById('previewPh').style.display='flex'"><div class="ph" id="previewPh" style="display:none">加载失败</div>`; }
+      else { $('preview').innerHTML=`<div class="ph">预览</div>`; $('preview').style.background=gradCss(newGrad); }
     };
     urlInput.oninput=updPreview;
     $('sampleBtn').onclick=()=>{ urlInput.value='https://picsum.photos/seed/mg'+uid()+'/360/640'; updPreview(); toast('已填入示例图片直链（9:16）'); };
@@ -1340,6 +1382,7 @@ function bindMain(s){
   const imgbbFile=$('imgbbFileInput');
   const imgbbBtn=$('imgbbUploadBtn');
   const imgbbStatus=$('imgbbStatus');
+  let uploadedUrl = '';
   if(imgbbBtn && imgbbFile){
     imgbbBtn.onclick=async ()=>{
       const file = imgbbFile.files[0];
@@ -1347,17 +1390,14 @@ function bindMain(s){
       if(file.size > 32*1024*1024){ toast('图片超过32MB限制', true); return; }
       imgbbBtn.disabled=true;
       imgbbBtn.textContent='上传中...';
-      imgbbStatus.textContent='正在上传到 ImgBB 图床...';
+      imgbbStatus.textContent='⏳ 正在上传到 ImgBB 图床...';
       try{
-        const imgbbUrl = await uploadToImgBB(file);
-        if(urlInput){
-          urlInput.value = imgbbUrl;
-          if(typeof updPreview === 'function') updPreview();
-        }
-        imgbbStatus.textContent='✅ 上传成功！直链已自动填入上方';
+        uploadedUrl = await uploadToImgBB(file);
+        imgbbStatus.innerHTML='✅ 上传成功！直链：<code style="font-size:10px;word-break:break-all;">'+uploadedUrl+'</code>';
         imgbbStatus.style.color='#4ade80';
         toast('上传成功，图片已存储到云端图床');
       }catch(e){
+        uploadedUrl = '';
         imgbbStatus.textContent='❌ 上传失败：'+e;
         imgbbStatus.style.color='#ff6b9d';
         toast('上传失败：'+e, true);
@@ -1367,21 +1407,45 @@ function bindMain(s){
       }
     };
   }
+  // 通过链接添加到图库（URL直链）
   const addBtn=$('addBtn'); if(addBtn) addBtn.onclick=async()=>{
     const url=($('urlInput').value||'').trim();
-    const title=($('titleInput').value||'').trim()||('美图 '+(gallery.length+1));
-    const introEl=$('directIntro');
-    const intro = introEl ? introEl.value.trim() : '';
     if(!url){ toast('请粘贴图片链接', true); return; }
-    // 校验图片规格
+    const title='美图 '+(gallery.length+1);
     toast('正在检查图片规格...', false);
     const check = await checkImageDimensions(url);
     if(!check.valid){ toast('规格不正确，请上传正确规格的图', true); return; }
     try{
-      const r=await fetch(PARSER_BASE + '/api/gallery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,s:'直链',grad:newGrad,url,srcTag:'直链',password:s.password,ratio:check.ratio,intro:intro})});
+      const r=await fetch(PARSER_BASE + '/api/gallery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,s:'直链',grad:newGrad,url,srcTag:'直链',password:s.password,ratio:check.ratio,intro:''})});
       const d=await r.json();
       if(d.success){ toast(`已通过链接添加到图库：<b>${title}</b>（${check.ratio.replace('/',':')}）`); await loadGallery(); dailyPage=0; tab='daily'; renderApp(s); }
       else toast(d.error||'添加失败',true);
+    }catch(e){ toast('添加失败，请检查服务',true); }
+  };
+  // 上传本地图片到图库（含资料信息、备注等）
+  const localAddBtn=$('localAddBtn');
+  if(localAddBtn) localAddBtn.onclick=async()=>{
+    if(!uploadedUrl){ toast('请先上传图片到图床', true); return; }
+    const nickname=($('localName').value||'').trim();
+    const height=($('localHeight').value||'').trim();
+    const age=($('localAge').value||'').trim();
+    const job=($('localJob').value||'').trim();
+    const hobby=($('localHobby').value||'').trim();
+    const bwh=($('localBwh').value||'').trim();
+    const tags=[...selectedTags];
+    const intro=($('localIntro').value||'').trim();
+    const title=nickname||('美图 '+(gallery.length+1));
+    toast('正在检查图片规格...', false);
+    const check = await checkImageDimensions(uploadedUrl);
+    if(!check.valid){ toast('规格不正确，请上传正确规格的图', true); return; }
+    try{
+      const r=await fetch(PARSER_BASE + '/api/gallery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,s:'上传',grad:newGrad,url:uploadedUrl,srcTag:'上传',password:s.password,ratio:check.ratio,intro,nickname,height,age,job,hobby,bwh,tags})});
+      const d=await r.json();
+      if(d.success){
+        toast(`已添加 <b>${title}</b> 到图库`);
+        selectedTags.clear();
+        await loadGallery(); dailyPage=0; tab='daily'; renderApp(s);
+      } else toast(d.error||'添加失败',true);
     }catch(e){ toast('添加失败，请检查服务',true); }
   };
 
