@@ -722,9 +722,7 @@ let chatUser = null;
 let chatPollTimer = null;
 let chatShowLikes = false;
 let chatMessages = [];
-let inboxViewed = false;        // 客服本次会话是否查看过收件箱
-let unviewedUsers = new Set();   // 本次会话中已收到通知的新用户
-let inboxPollTimer = null;       // 收件箱轮询定时器
+let inboxPollTimer = null;
 
 const HEART_ON = `<svg viewBox="0 0 24 24" fill="#e25563" stroke="#e25563" stroke-width="1.2" stroke-linejoin="round"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
 const HEART_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="#8b96a5" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
@@ -755,10 +753,12 @@ function playBeep(type='inbox'){
   }catch(e){}
 }
 
-// 客服端收件箱轮询：每 8 秒检查一次
+// 客服端收件箱轮询：每 8 秒检查一次，登录后立即检查
 async function startInboxPoll(){
   stopInboxPoll();
   inboxPollTimer = setInterval(checkInbox, 8000);
+  // 立即执行一次，不要等 8 秒
+  checkInbox();
 }
 function stopInboxPoll(){
   if(inboxPollTimer){ clearInterval(inboxPollTimer); inboxPollTimer = null; }
@@ -769,43 +769,38 @@ async function checkInbox(){
     const r = await fetch(PARSER_BASE + '/api/inbox');
     const d = await r.json();
     if(!d.success) return;
-    inbox = d.inbox || [];
+    const newInbox = d.inbox || [];
+    const prevInbox = inbox || [];
+    inbox = newInbox;
     const curUsers = new Set(inbox.map(it=>extractUsername(it)));
-    // 找出本次轮询中新增的用户（之前未通知过的）
-    const newUsers = [...curUsers].filter(u => !unviewedUsers.has(u));
-    if(newUsers.length > 0 && inboxViewed){
-      // 有新用户发消息 → 提示
+    const prevUsers = new Set(prevInbox.map(it=>extractUsername(it)));
+    // 有新用户发消息 → 提示（无论是否进入过收件箱，只要客服在线就通知）
+    const newUsers = [...curUsers].filter(u => !prevUsers.has(u));
+    if(newUsers.length > 0){
       playBeep('inbox');
       const names = newUsers.slice(0, 2).join('、');
       toast(`📬 收件箱收到 <b>${newUsers.length}</b> 条新消息${newUsers.length<=2?' · '+names:''}`);
     }
-    // 更新已通知用户集合（不重复通知）
-    newUsers.forEach(u => unviewedUsers.add(u));
-    // 刷新 badge（显示未读新用户数）
+    // 刷新 badge
     refreshInboxBadge();
   }catch(e){ console.error('收件箱轮询失败', e); }
 }
 
-// 刷新 Tab 栏「收件箱」按钮的数字
-// 规则：登录后显示总用户数；进入收件箱后只显示"存在于 inbox 中且本次会话未读"的用户数
-// 删除用户后，该用户不在 inbox 中，自动不计入 badge
+// 刷新 Tab 栏「收件箱」按钮的数字：显示收件箱中有多少个不同用户
 function refreshInboxBadge(){
   const session = getSession();
   if(!session || session.role !== 'staff') return;
   const tabEl = document.querySelector('[data-tab="inbox"]');
   if(!tabEl) return;
-  const inboxUsers = new Set(inbox.map(it=>extractUsername(it)));
-  // 只统计：存在于 inbox 中 且 在 unviewedUsers 里的用户
-  const unviewedCount = [...unviewedUsers].filter(u => inboxUsers.has(u)).length;
-  const badgeCount = inboxViewed ? unviewedCount : inboxUsers.size;
+  const uniqueCount = new Set((inbox||[]).map(it=>extractUsername(it))).size;
   let badgeEl = tabEl.querySelector('.badge');
-  if(badgeCount > 0){
+  if(uniqueCount > 0){
     if(!badgeEl){
       badgeEl = document.createElement('span');
       badgeEl.className = 'badge';
       tabEl.appendChild(badgeEl);
     }
-    badgeEl.textContent = badgeCount;
+    badgeEl.textContent = uniqueCount;
     badgeEl.style.display = '';
   } else {
     if(badgeEl) badgeEl.style.display = 'none';
@@ -957,7 +952,6 @@ function renderApp(s){
   $('tabs').querySelectorAll('.tab').forEach(b=>b.onclick=async()=>{
     tab=b.dataset.tab;
     if(tab==='inbox'&&s.role==='staff'){
-      inboxViewed = true; // 进入收件箱后开启新消息通知
       await loadInbox();
       fetch(PARSER_BASE + '/api/inbox/mark-read', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({})}).catch(()=>{});
     }
