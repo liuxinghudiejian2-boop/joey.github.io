@@ -723,6 +723,7 @@ let chatPollTimer = null;
 let chatShowLikes = false;
 let chatMessages = [];
 let inboxPollTimer = null;
+let unviewedUsers = new Set(); // 记录已通知过的用户（避免首次加载重复提示）
 
 const HEART_ON = `<svg viewBox="0 0 24 24" fill="#e25563" stroke="#e25563" stroke-width="1.2" stroke-linejoin="round"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
 const HEART_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="#8b96a5" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
@@ -1232,9 +1233,11 @@ function renderDirectMode(opts){
 }
 
 function renderMsg(s){
+  // 普通用户发给客服（12356789），客服发给对应用户
+  const chatPartner = s.role === 'staff' ? s.username : '12356789';
   return `<div class="sec-bar"><h2>消息</h2></div>
     <div class="inbox-list">
-      <div class="inbox-item" data-chat="${escapeHtml(s.username)}" style="cursor:pointer">
+      <div class="inbox-item" data-chat="${escapeHtml(chatPartner)}" style="cursor:pointer">
         <div style="width:48px;height:48px;border-radius:50%;background:var(--accent);color:#0d1117;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;font-size:18px;font-family:var(--serif);">客</div>
         <div class="info">
           <div class="t">客服</div>
