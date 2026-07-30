@@ -6,6 +6,7 @@
 <title>欢悦夜赏 · 高保真原型</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+html{ overflow-x:hidden; max-width:100vw; }
   :root{
     --bg:#050810; --surface:#080d1a; --surface2:#0c1220; --border:#1a2a4a;
     --text:#dde8ff; --muted:#4a6080; --accent:#00e5ff; --accent2:#4facfe;
@@ -17,6 +18,7 @@
     font-family:"Microsoft YaHei","PingFang SC",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     background:var(--bg); color:var(--text); line-height:1.7;
     min-height:100vh; -webkit-font-smoothing:antialiased;
+    overflow-x:hidden; max-width:100vw;
     background-image:
       linear-gradient(rgba(0,229,255,.025) 1px,transparent 1px),
       linear-gradient(90deg,rgba(0,229,255,.025) 1px,transparent 1px);
@@ -180,6 +182,20 @@
     border-radius:6px; padding:10px 12px; font-size:13px; transition:.2s; }
   .profile-item input:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(0,229,255,.06); }
   @media(max-width:600px){ .profile-grid{ grid-template-columns:repeat(2,1fr);} }
+
+  /* ===== 中等屏幕保护 ===== */
+  @media (max-width:768px){
+    .daily-grid{ grid-template-columns:repeat(4,1fr); }
+  }
+  @media (max-width:480px){
+    .daily-grid{ grid-template-columns:repeat(2,1fr); gap:8px; }
+    .grad-pick{ grid-template-columns:repeat(3,1fr); gap:6px; }
+  }
+
+  /* ===== 通用溢出保护 ===== */
+  img{ max-width:100%; }
+  .app, .auth-wrap{ max-width:100vw; overflow-x:hidden; }
+  .daily-card, .card, .parse-card, .inbox-item, .fav-item{ max-width:100%; }
 
   /* ===== 备注多选标签 ===== */
   .tag-chips{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;}
@@ -406,8 +422,21 @@
     .grad-pick{ grid-template-columns:repeat(4,1fr);}
     .parse-grid{ grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px;}
     .daily-grid{ grid-template-columns:repeat(3,1fr); gap:10px;}
-    .app{ padding:16px 10px 90px;}
+    .app{ padding:16px 10px 90px; overflow-x:hidden; }
     .chat-box{ border-radius:10px 10px 0 0; }
+    header{ padding-bottom:18px; gap:12px; }
+    .tabs{ overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; }
+    .tab{ padding:10px 14px; font-size:12px; white-space:nowrap; }
+    .auth-card{ padding:28px 18px; }
+    .daily-card .card-nick{ font-size:10px; padding:3px 8px; }
+    .content-wrap{ overflow-x:hidden; }
+    .form-card{ padding:18px; max-width:100%; }
+    .preview-box{ aspect-ratio:3/4; }
+    .sec-bar{ flex-direction:column; align-items:flex-start; gap:8px; }
+    .row{ flex-direction:column; align-items:stretch; }
+    .url-row{ flex-direction:column; align-items:stretch; gap:8px; }
+    .inbox-item{ flex-wrap:wrap; }
+    .fav-item{ flex-wrap:wrap; }
   }
 </style>
 </head>
