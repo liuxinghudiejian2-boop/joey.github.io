@@ -898,7 +898,7 @@ function fullProxyUrl(proxyPath){
   if(!proxyPath) return '';
   if(proxyPath.startsWith('http')){
     // 图床直链 → 通过后端代理，设置 24 小时浏览器缓存
-    if(/catbox\.moe|freeimage\.host|imgbb\.com|i\.ibb\.co|sm\.ms|litter\.catbox/i.test(proxyPath)){
+    if(/catbox\.moe|freeimage\.host|imgbb\.com|i\.ibb\.co|sm\.ms|litter\.catbox|0x0\.st|postimg\.cc|upload\.cc|imgur\.com/i.test(proxyPath)){
       return PARSER_BASE + '/api/img-cache?url=' + encodeURIComponent(proxyPath);
     }
     return proxyPath;
