@@ -650,12 +650,15 @@ const GRADS = [
 ];
 const gradCss = i => { const [a,b]=GRADS[i%GRADS.length]; return `linear-gradient(135deg,${a},${b})`; };
 
-/* 图片规格：仅 9:16 */
+/* 图片规格：竖屏 9:16 ~ 9:21（覆盖常见手机屏，卡片按 9:16 显示） */
 const ACCEPTED_RATIOS = [
   {ratio:9/16,  str:'9/16', label:'9:16'},
 ];
-const RATIO_TOLERANCE = 0.03;
-const RATIO_SPECS_TEXT = '仅支持 9:16 规格';
+/* 接受的宽高比区间（w/h）：9:21=0.4286 ~ 9:16=0.5625，两端各留 2% 容差 */
+const RATIO_MIN = 9/21;   // 0.4286
+const RATIO_MAX = 9/16;   // 0.5625
+const RATIO_TOL = 0.02;   // 两端 2% 容差
+const RATIO_SPECS_TEXT = '竖屏 9:16~9:21（常见手机竖屏比例）';
 
 /* ===== ImgBB 图床配置 ===== */
 /* 通过 Render 后端中转上传（绕过 workers.dev 被屏蔽的问题） */
@@ -690,10 +693,11 @@ async function uploadToImgBB(file){
 function matchRatio(w, h){
   if(!w || !h) return null;
   const r = w / h;
-  for(const a of ACCEPTED_RATIOS){
-    if(Math.abs(r - a.ratio) / a.ratio < RATIO_TOLERANCE) return a;
-  }
-  return null;
+  // 仅接受竖屏（高 >= 宽）且比例落在 9:21 ~ 9:16 区间（±2% 容差，覆盖常见手机竖屏）
+  if(h < w) return null;                          // 横屏一律不合格
+  if(r < RATIO_MIN*(1-RATIO_TOL) || r > RATIO_MAX*(1+RATIO_TOL)) return null; // 太扁或太长都不收
+  // 统一按 9:16 卡片显示
+  return ACCEPTED_RATIOS[0];
 }
 
 function checkImageDimensions(url, resolutionStr){
