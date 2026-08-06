@@ -195,7 +195,7 @@ html{ overflow-x:hidden; max-width:100vw; }
   /* ===== 通用溢出保护 ===== */
   img{ max-width:100%; }
   .app, .auth-wrap{ max-width:100vw; overflow-x:hidden; }
-  .daily-card, .card, .parse-card, .inbox-item, .fav-item{ max-width:100%; }
+  .daily-card, .card, .inbox-item, .fav-item{ max-width:100%; }
 
   /* ===== 备注多选标签 ===== */
   .tag-chips{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;}
@@ -206,36 +206,7 @@ html{ overflow-x:hidden; max-width:100vw; }
   .tag-chip.sel{ background:var(--accent); color:#050810;
     border-color:var(--accent); font-weight:700; box-shadow:0 0 16px rgba(0,229,255,.25);}
 
-  /* ===== 百度网盘解析相关样式 ===== */
-  .parse-status{ font-size:12px; padding:12px 14px; border-radius:6px; margin-bottom:16px; line-height:1.7;}
-  .parse-status.info{ color:var(--accent); background:rgba(0,229,255,.05); border:1px solid rgba(0,229,255,.15);}
-  .parse-status.error{ color:var(--like); background:rgba(255,107,157,.05); border:1px solid rgba(255,107,157,.15);}
-  .parse-status.loading{ color:var(--accent); background:rgba(0,229,255,.05); border:1px solid rgba(0,229,255,.1);}
-  .spinner{ display:inline-block; width:14px; height:14px; border:2px solid rgba(0,229,255,.15);
-    border-top-color:var(--accent); border-radius:50%; animation:spin .6s linear infinite; vertical-align:middle; margin-right:6px;}
-  @keyframes spin{ to{ transform:rotate(360deg);} }
-
-  .parse-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:14px; margin-bottom:18px;}
-  .parse-card{ background:rgba(0,229,255,.02); border:1px solid rgba(0,229,255,.1); border-radius:8px; overflow:hidden;
-    cursor:pointer; transition:.2s; position:relative;}
-  .parse-card:hover{ border-color:rgba(0,229,255,.35); box-shadow:0 0 16px rgba(0,229,255,.08);}
-  .parse-card.sel{ border-color:var(--accent); box-shadow:0 0 0 2px rgba(0,229,255,.2);}
-  .parse-card .pi{ width:100%; aspect-ratio:4/3; position:relative; overflow:hidden; background:#03050d;}
-  .parse-card .pi img{ position:absolute; inset:0; width:100%;height:100%; object-fit:cover;}
-  .parse-card .pi .pfall{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-    font-size:10px; color:var(--muted);}
-  .parse-card .pn{ padding:9px 12px; font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .parse-card .check{ position:absolute; top:8px; right:8px; width:24px; height:24px; border-radius:6px;
-    background:rgba(0,0,0,.7); border:1px solid rgba(0,229,255,.2); display:flex; align-items:center; justify-content:center; transition:.2s;}
-  .parse-card.sel .check{ background:var(--accent); border-color:var(--accent); box-shadow:0 0 12px rgba(0,229,255,.3);}
-  .parse-card.sel .check svg{ display:block;}
-  .parse-card .check svg{ display:none; width:14px; height:14px;}
-
-  .parser-config{ font-size:11px; color:var(--muted); background:var(--bg); border:1px solid var(--border);
-    border-radius:4px; padding:10px 12px; margin-bottom:16px; line-height:1.7;}
-  .parser-config code{ color:var(--accent); font-family:monospace; font-size:10px;}
-  .parser-config .cfg-input{ background:var(--surface2); border:1px solid var(--border); color:var(--text);
-    border-radius:3px; padding:4px 8px; font-size:11px; width:200px; margin-left:6px;}
+  /* ===== 百度网盘解析相关样式（已移除） ===== */
 
   .inbox-list{ display:flex; flex-direction:column; gap:10px;}
   .inbox-item{ display:flex; align-items:center; gap:14px; background:var(--surface);
@@ -437,7 +408,6 @@ html{ overflow-x:hidden; max-width:100vw; }
     .content-wrap::before{ display:none; }
     .grid{ grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:14px;}
     .grad-pick{ grid-template-columns:repeat(4,1fr);}
-    .parse-grid{ grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px;}
     .daily-grid{ grid-template-columns:repeat(3,1fr); gap:10px;}
     .app{ padding:16px 10px 90px; overflow-x:hidden; }
     .chat-box{ border-radius:10px 10px 0 0; }
@@ -668,8 +638,10 @@ async function uploadToImgBB(file){
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async () => {
-      const base64 = reader.result.split(',')[1];
       try{
+        // 上传前压缩：超尺寸/超大小的图先缩放到合理范围，加快上传并规避图床限制
+        const compressed = await compressImageForUpload(reader.result);
+        const base64 = compressed.dataUrl.split(',')[1];
         const r = await fetch(IMGBB_UPLOAD_URL(), {
           method:'POST',
           headers:{'Content-Type':'application/json'},
@@ -677,6 +649,10 @@ async function uploadToImgBB(file){
         });
         const d = await r.json();
         if(d.success){
+          // 若发生了压缩，提示用户（避免疑惑）
+          if(compressed.compressed){
+            toast(`图片已自动压缩至 ${compressed.w}×${compressed.h}（约 ${compressed.sizeKB}KB）后上传`, false);
+          }
           resolve(d.url);
         } else {
           reject(d.error || '上传失败');
@@ -687,6 +663,53 @@ async function uploadToImgBB(file){
     };
     reader.onerror = () => reject('文件读取失败');
     reader.readAsDataURL(file);
+  });
+}
+
+/* 上传前图片压缩：限制最长边与文件大小，减少传输体积 */
+function compressImageForUpload(dataUrl){
+  return new Promise(resolve => {
+    const MAX_EDGE = 1600;         // 最长边像素上限
+    const MAX_BYTES = 8*1024*1024; // 目标文件大小上限（8MB，ImgBB 限制 32MB）
+    const QUALITY = 0.85;          // JPEG 质量
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth, h = img.naturalHeight;
+      // 无需压缩的情况：尺寸不大 且 原图已不大（从 dataUrl 估算）
+      const origBytes = Math.floor((dataUrl.length - 22) * 3/4); // base64 长度->字节估算
+      if(w <= MAX_EDGE && h <= MAX_EDGE && origBytes <= MAX_BYTES){
+        resolve({ dataUrl, w, h, compressed:false, sizeKB: Math.max(1, Math.round(origBytes/1024)) });
+        return;
+      }
+      // 等比缩放
+      let nw = w, nh = h;
+      const max = Math.max(w, h);
+      if(max > MAX_EDGE){
+        const scale = MAX_EDGE / max;
+        nw = Math.round(w * scale);
+        nh = Math.round(h * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = nw; canvas.height = nh;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, nw, nh);
+      ctx.drawImage(img, 0, 0, nw, nh);
+      let out = canvas.toDataURL('image/jpeg', QUALITY);
+      // 若压缩后仍过大，逐级降低质量
+      let q = QUALITY;
+      while(Math.floor((out.length-22)*3/4) > MAX_BYTES && q > 0.4){
+        q -= 0.15;
+        out = canvas.toDataURL('image/jpeg', q);
+      }
+      const outBytes = Math.floor((out.length-22)*3/4);
+      resolve({
+        dataUrl: out, w: nw, h: nh, compressed:true,
+        sizeKB: Math.max(1, Math.round(outBytes/1024))
+      });
+    };
+    img.onerror = () => resolve({ dataUrl, w:0, h:0, compressed:false, sizeKB:0 });
+    img.src = dataUrl;
   });
 }
 
@@ -702,7 +725,7 @@ function matchRatio(w, h){
 
 function checkImageDimensions(url, resolutionStr){
   return new Promise(resolve => {
-    // 优先用 Baidu API 返回的 resolution 字段
+    // 优先使用传入的 resolution 字符串（如 "600x1066"）
     if(resolutionStr){
       const m = String(resolutionStr).match(/(\d+)\s*[x×*X]\s*(\d+)/);
       if(m){
@@ -723,7 +746,7 @@ function checkImageDimensions(url, resolutionStr){
   });
 }
 
-/* 解析服务地址（启动 baidu_pan_parser.py 后默认运行在 localhost:5000）*/
+/* 后端服务地址（Render） */
 const PARSER_BASE = 'https://hyys-backend.onrender.com'; // Render 后端地址
 
 /* ============ 存储 ============ */
@@ -760,12 +783,8 @@ const DAILY_PER_PAGE = 28; // 7列 × 4行
 let newGrad = 0;        // 添加图片表单回退配色
 let authRole = 'user';  // 登录页选中的身份
 let authMode = 'login'; // 普通用户：登录 / 注册
-let addMode = 'baidu';  // 添加图片模式：baidu(百度网盘) / direct(直链)
-let parsedImages = [];  // 百度网盘解析出的图片列表
 let selectedTags = new Set();  // 图片备注多选标签
 const NOTE_TAGS = ['大胸','马甲线','校园','黑色丝袜','丝袜','翘臀','cosplay'];
-let selectedImgs = new Set(); // 选中的图片索引
-let parseLoading = false;
 
 /* ============ 聊天状态 ============ */
 let chatUser = null;
@@ -781,7 +800,6 @@ let lastKnownChatPartners = []; // 上一次轮询的聊天伙伴，用于检测
 const HEART_ON = `<svg viewBox="0 0 24 24" fill="#e25563" stroke="#e25563" stroke-width="1.2" stroke-linejoin="round"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
 const HEART_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="#8b96a5" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
 const SEND_ICON = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#0d1117" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
-const CHECK_ICON = `<svg viewBox="0 0 24 24" fill="#0d1117" stroke="#0d1117" stroke-width="2"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const TRASH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="#e25563" stroke-width="1.8"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m2 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11v6M14 11v6" stroke-linecap="round"/></svg>`;
 
 /* ============ 通知系统 ============ */
@@ -1128,101 +1146,7 @@ function renderAdd(){
     `<div class="grad-opt ${i===newGrad?'sel':''}" data-grad="${i}" style="background:linear-gradient(135deg,${g[0]},${g[1]})"></div>`).join('');
 
   return `<div class="sec-bar"><h2>添加图片到图库</h2><span class="cnt">客服独有功能</span></div>
-    <div class="add-mode-tabs">
-      <button class="${addMode==='baidu'?'active':''}" data-amode="baidu">百度网盘分享</button>
-      <button class="${addMode==='direct'?'active':''}" data-amode="direct">图片直链</button>
-    </div>
-    ${addMode==='baidu' ? renderBaiduMode(opts) : renderDirectMode(opts)}`;
-}
-
-/* ===== 百度网盘分享解析模式 ===== */
-function renderBaiduMode(opts){
-  // 解析结果网格
-  let parseResultHtml = '';
-  if(parsedImages.length > 0){
-    const cards = parsedImages.map((img, i) => `
-      <div class="parse-card ${selectedImgs.has(i)?'sel':''}" data-pidx="${i}">
-        <div class="pi">
-          ${img.url ? `<img src="${fullProxyUrl(img.url)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-          <div class="pfall" style="display:none">加载失败</div>` : `<div class="pfall">无预览</div>`}
-        </div>
-        <div class="pn">${img.name}</div>
-        <div class="check">${CHECK_ICON}</div>
-      </div>`).join('');
-    const selCount = selectedImgs.size;
-    parseResultHtml = `
-      <div class="parse-status info">解析成功，共 <b>${parsedImages.length}</b> 张图片，已选 <b>${selCount}</b> 张</div>
-      <div class="row" style="margin-bottom:12px;gap:8px">
-        <button class="btn btn-ghost" id="selAllBtn" style="padding:7px 14px;font-size:12px">全选</button>
-        <button class="btn btn-ghost" id="selNoneBtn" style="padding:7px 14px;font-size:12px">取消全选</button>
-      </div>
-      <div class="parse-grid">${cards}</div>
-      <div class="row">
-        <button class="btn btn-primary" id="addParsedBtn" ${selCount===0?'disabled':''}>添加选中的 ${selCount} 张到图库</button>
-      </div>`;
-  } else if(parseLoading){
-    parseResultHtml = `<div class="parse-status loading"><span class="spinner"></span>正在解析百度网盘分享链接，请稍候...</div>`;
-  }
-
-  return `<div class="form-card">
-    <div class="parser-config">
-      解析服务已集成，直接粘贴百度网盘分享链接和提取码即可解析。<br>
-      如解析失败请确认服务正在运行。
-      <br><span style="color:var(--accent2)">图片规格要求：${RATIO_SPECS_TEXT}，不符合规格的图片将无法添加。</span>
-    </div>
-    <div class="field">
-      <label>百度网盘分享链接</label>
-      <input type="text" id="bdUrl" placeholder="粘贴分享链接，如 https://pan.baidu.com/s/1xxxxxx">
-    </div>
-    <div class="field">
-      <label>提取码</label>
-      <div class="url-row">
-        <input type="text" id="bdCode" placeholder="4位提取码，如 abcd" maxlength="10" style="max-width:200px">
-        <button class="btn btn-primary" id="parseBtn">解析链接</button>
-      </div>
-      <p class="mini-note">支持两种格式：① 链接 + 提取码分开填 ② 链接里已含 ?pwd=xxxx（提取码可留空）。也支持直接粘贴"链接: xxx 提取码: abcd"整段文字。</p>
-    </div>
-    <div class="field">
-      <label>资料信息</label>
-      <div class="profile-grid">
-        <div class="profile-item">
-          <span class="pl">姓名</span>
-          <input type="text" id="bdName" placeholder="如：小美" maxlength="20">
-        </div>
-        <div class="profile-item">
-          <span class="pl">身高</span>
-          <input type="text" id="bdHeight" placeholder="如：165cm" maxlength="10">
-        </div>
-        <div class="profile-item">
-          <span class="pl">年龄</span>
-          <input type="text" id="bdAge" placeholder="如：22" maxlength="5">
-        </div>
-        <div class="profile-item">
-          <span class="pl">职业</span>
-          <input type="text" id="bdJob" placeholder="如：学生" maxlength="20">
-        </div>
-        <div class="profile-item">
-          <span class="pl">爱好</span>
-          <input type="text" id="bdHobby" placeholder="如：旅行" maxlength="30">
-        </div>
-        <div class="profile-item">
-          <span class="pl">三维</span>
-          <input type="text" id="bdBwh" placeholder="如：90-60-90" maxlength="20">
-        </div>
-      </div>
-    </div>
-    <div class="field">
-      <label>图片备注（可多选）</label>
-      <div class="tag-chips" id="tagChips">
-        ${NOTE_TAGS.map(t=>`<span class="tag-chip ${selectedTags.has(t)?'sel':''}" data-tag="${t}">${t}</span>`).join('')}
-      </div>
-    </div>
-    <div class="field">
-      <label>图片介绍</label>
-      <textarea id="bdIntro" placeholder="写点什么介绍这组图片吧..." rows="3" maxlength="200" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:10px 12px;font-size:13px;resize:vertical;font-family:inherit;"></textarea>
-    </div>
-    ${parseResultHtml}
-  </div>`;
+    ${renderDirectMode(opts)}`;
 }
 
 /* ===== 图片直链模式 ===== */
@@ -1576,9 +1500,6 @@ function bindMain(s){
     }catch(e){ toast('上传失败，请检查服务',true); }
   };
 
-  // 添加图片 - 模式切换
-  document.querySelectorAll('[data-amode]').forEach(b=>b.onclick=()=>{ addMode=b.dataset.amode; renderApp(s); });
-
   // 图片备注多选标签
   document.querySelectorAll('[data-tag]').forEach(el=>el.onclick=()=>{
     const tag = el.dataset.tag;
@@ -1589,76 +1510,6 @@ function bindMain(s){
 
   // 回退配色选择
   document.querySelectorAll('.grad-opt').forEach(el=>el.onclick=()=>{ newGrad=+el.dataset.grad; renderApp(s); });
-
-  // ===== 百度网盘解析模式 =====
-  const parseBtn=$('parseBtn');
-  if(parseBtn) parseBtn.onclick=()=> doParse(s);
-
-  // 解析结果卡片点击选择
-  document.querySelectorAll('[data-pidx]').forEach(el=>el.onclick=()=>{
-    const idx=+el.dataset.pidx;
-    if(selectedImgs.has(idx)) selectedImgs.delete(idx); else selectedImgs.add(idx);
-    renderApp(s);
-  });
-  const selAll=$('selAllBtn'); if(selAll) selAll.onclick=()=>{
-    parsedImages.forEach((_,i)=>selectedImgs.add(i)); renderApp(s);
-  };
-  const selNone=$('selNoneBtn'); if(selNone) selNone.onclick=()=>{
-    selectedImgs.clear(); renderApp(s);
-  };
-  const addParsed=$('addParsedBtn'); if(addParsed) addParsed.onclick=async()=>{
-    const toAdd = [...selectedImgs].map(i=>parsedImages[i]).filter(x=>x);
-    if(!toAdd.length) return;
-    // 读取资料信息和备注
-    const nameEl=$('bdName');
-    const nickname = nameEl ? nameEl.value.trim() : '';
-    const heightEl=$('bdHeight');
-    const height = heightEl ? heightEl.value.trim() : '';
-    const ageEl=$('bdAge');
-    const age = ageEl ? ageEl.value.trim() : '';
-    const jobEl=$('bdJob');
-    const job = jobEl ? jobEl.value.trim() : '';
-    const hobbyEl=$('bdHobby');
-    const hobby = hobbyEl ? hobbyEl.value.trim() : '';
-    const bwhEl=$('bdBwh');
-    const bwh = bwhEl ? bwhEl.value.trim() : '';
-    const tags = [...selectedTags];
-    const introEl=$('bdIntro');
-    const intro = introEl ? introEl.value.trim() : '';
-    // 逐张校验图片规格
-    toast('正在检查图片规格...', false);
-    let validImgs=[], invalidCount=0;
-    for(const img of toAdd){
-      const check = await checkImageDimensions(fullProxyUrl(img.url), img.resolution);
-      if(check.valid){ validImgs.push({...img, ratio:check.ratio}); }
-      else { invalidCount++; }
-    }
-    if(invalidCount>0 && !validImgs.length){
-      toast('规格不正确，请上传正确规格的图（'+invalidCount+' 张不符合）', true);
-      return;
-    }
-    let okCount=0;
-    for(const img of validImgs){
-      try{
-        const r=await fetch(PARSER_BASE + '/api/gallery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-          title: img.name.replace(/\.[^.]+$/,'') || ('美图 '+(gallery.length+1)),
-          s:'百度网盘', grad:newGrad,
-          url: fullProxyUrl(img.url), srcTag:'网盘', password:s.password, ratio:img.ratio,
-          nickname: nickname, tags: tags, intro: intro,
-          height: height, age: age, job: job, hobby: hobby, bwh: bwh
-        })});
-        const d=await r.json();
-        if(d.success) okCount++;
-      }catch(e){}
-    }
-    if(invalidCount>0){
-      toast(`已添加 <b>${okCount}</b> 张到图库，${invalidCount} 张规格不符已跳过`);
-    } else {
-      toast(`已添加 <b>${okCount}</b> 张到图库`);
-    }
-    parsedImages=[]; selectedImgs.clear(); selectedTags.clear();
-    await loadGallery(); dailyPage=0; tab='daily'; renderApp(s);
-  };
 
   // ===== 图片直链模式 =====
   const urlInput=$('urlInput');
@@ -1793,47 +1644,6 @@ function bindMain(s){
   });
   // 聊天模态框事件绑定（每次渲染都重新绑定）
   bindChatEvents(s);
-}
-
-/* ===== 百度网盘分享链接解析 ===== */
-async function doParse(s){
-  const urlEl=$('bdUrl'), codeEl=$('bdCode');
-  if(!urlEl) return;
-  const url=urlEl.value.trim();
-  const code=codeEl ? codeEl.value.trim() : '';
-
-  if(!url){ toast('请输入百度网盘分享链接', true); return; }
-  if('pan.baidu.com'!==url.split('/')[2] && !url.includes('pan.baidu.com')){
-    toast('请输入有效的百度网盘分享链接', true); return;
-  }
-
-  parseLoading=true;
-  parsedImages=[];
-  selectedImgs.clear();
-  renderApp(s);
-
-  try{
-    const resp = await fetch(PARSER_BASE + '/api/parse', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({url, code})
-    });
-    const data = await resp.json();
-    parseLoading=false;
-
-    if(data.success && data.images && data.images.length>0){
-      parsedImages = data.images;
-      // 默认全选
-      data.images.forEach((_,i)=>selectedImgs.add(i));
-      toast(`解析成功，找到 <b>${data.images.length}</b> 张图片`);
-    } else {
-      toast(data.error || '解析失败，请检查链接和提取码', true);
-    }
-  } catch(e){
-    parseLoading=false;
-    toast('解析服务连接失败，请确认服务正在运行', true);
-  }
-  renderApp(s);
 }
 
 /* ============ 聊天功能 ============ */
@@ -1985,24 +1795,6 @@ function bindChatEvents(session){
   $('chatOverlay').onclick=e=>{ if(e.target===$('chatOverlay')) closeChat(); };
 }
 
-/* localtunnel 访问优化：获取公网 IP 并显示提示 */
-async function checkTunnelIP(){
-  if(!window.location.hostname.endsWith('.loca.lt')) return;
-  try{
-    const r = await fetch(PARSER_BASE + '/api/public-ip');
-    const d = await r.json();
-    if(d.ip){
-      window.__PUBLIC_IP__ = d.ip;
-      const tip = document.createElement('div');
-      tip.id = 'tunnelTip';
-      tip.style.cssText = 'position:fixed;top:8px;right:8px;z-index:99999;background:var(--surface);color:var(--accent);padding:10px 16px;border-radius:4px;font-size:13px;border:1px solid var(--border);max-width:320px;box-shadow:0 4px 16px rgba(0,0,0,0.4);line-height:1.6;letter-spacing:.3px;';
-      tip.innerHTML = '<div>公网 IP：<b style="font-size:15px;letter-spacing:1px">'+d.ip+'</b></div><div style="color:#888;font-size:11px;margin-top:4px">首次访问确认页面时输入此 IP，之后不会再弹</div>';
-      document.body.prepend(tip);
-      setTimeout(()=>{ if(tip){ tip.style.transition='opacity 0.5s'; tip.style.opacity='0'; setTimeout(()=>tip.remove(),500); } }, 12000);
-    }
-  }catch(e){ /* ignore */ }
-}
-
 /* ESC 关闭灯箱 */
 document.addEventListener('keydown', e=>{
   if(e.key==='Escape'){
@@ -2012,7 +1804,6 @@ document.addEventListener('keydown', e=>{
 
 /* 启动 */
 route();
-checkTunnelIP();
 </script>
 </body>
 </html>
