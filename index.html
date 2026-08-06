@@ -885,13 +885,15 @@ function toast(msg, err){ const t=$('toast'); t.innerHTML=msg; t.className='toas
 
 function imgHtml(url, grad, ratio){
   const r = ratio || '9/16';
+  const src = fullProxyUrl(url);
   return `<div class="img" style="background:${gradCss(grad)};aspect-ratio:${r}">`
-    + (url ? `<img src="${url}" onerror="this.style.display='none'">` : '')
+    + (src ? `<img src="${src}" onerror="this.style.display='none'">` : '')
     + `</div>`;
 }
 function thumbHtml(url, grad){
+  const src = fullProxyUrl(url);
   return `<div class="thumb" style="background:${gradCss(grad)}">`
-    + (url ? `<img src="${url}" onerror="this.style.display='none'">` : '')
+    + (src ? `<img src="${src}" onerror="this.style.display='none'">` : '')
     + `</div>`;
 }
 function fullProxyUrl(proxyPath){
@@ -1066,7 +1068,7 @@ function renderDaily(role){
     const liked = likedIds.has(c.id);
     return `<div class="daily-card">
       <div class="img" data-preview="${c.id}" style="background:${gradCss(c.grad)};aspect-ratio:9/16;cursor:pointer">
-        ${c.url ? `<img src="${c.url}" onerror="this.style.display='none'">` : ''}
+        ${c.url ? `<img src="${fullProxyUrl(c.url)}" onerror="this.style.display='none'">` : ''}
         <span class="tag-day">&#9679; 已认证</span>
         ${c.nickname ? `<span class="card-nick">${escapeHtml(c.nickname)}</span>` : ''}
         <div class="heart ${liked?'on':''}" data-like="${c.id}">${liked?HEART_ON:HEART_OFF}</div>
@@ -1460,7 +1462,7 @@ async function loadUserListUI(){
 
 /* ===== 大图预览灯箱 ===== */
 function openLightbox(c, s){
-  $('lbImg').src = c.url || '';
+  $('lbImg').src = fullProxyUrl(c.url) || '';
   $('lbImg').style.background = c.url ? '' : gradCss(c.grad);
   $('lbImg').onerror = function(){ this.style.display='none'; };
   // 姓名
@@ -1662,7 +1664,7 @@ function bindMain(s){
   const urlInput=$('urlInput');
   if(urlInput){
     const updPreview=()=>{ const v=urlInput.value.trim(); const ph=$('previewPh');
-      if(v){ $('preview').innerHTML=`<img src="${v}" onerror="this.style.display='none';document.getElementById('previewPh').style.display='flex'"><div class="ph" id="previewPh" style="display:none">加载失败</div>`; }
+      if(v){ $('preview').innerHTML=`<img src="${fullProxyUrl(v)}" onerror="this.style.display='none';document.getElementById('previewPh').style.display='flex'"><div class="ph" id="previewPh" style="display:none">加载失败</div>`; }
       else { $('preview').innerHTML=`<div class="ph">预览</div>`; $('preview').style.background=gradCss(newGrad); }
     };
     urlInput.oninput=updPreview;
@@ -1729,7 +1731,7 @@ function bindMain(s){
     if(!url){ toast('请粘贴图片链接', true); return; }
     const title='美图 '+(gallery.length+1);
     toast('正在检查图片规格...', false);
-    const check = await checkImageDimensions(url);
+    const check = await checkImageDimensions(fullProxyUrl(url));
     if(!check.valid){ toast('规格不正确，请上传正确规格的图', true); return; }
     try{
       const r=await fetch(PARSER_BASE + '/api/gallery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,s:'直链',grad:newGrad,url,srcTag:'直链',password:s.password,ratio:check.ratio,intro:''})});
@@ -1759,7 +1761,7 @@ function bindMain(s){
       check = m ? {valid:true, ratio:m.str, w:localImgDims.w, h:localImgDims.h}
                 : {valid:false, ratio:null, w:localImgDims.w, h:localImgDims.h};
     } else {
-      check = await checkImageDimensions(uploadedUrl);
+      check = await checkImageDimensions(fullProxyUrl(uploadedUrl));
     }
     if(!check.valid){ toast('规格不正确，请上传正确规格的图', true); return; }
     try{
